@@ -2,35 +2,58 @@
 pipeline {
     agent {label "master"}
     parameters {     
-        choice (
-                choices: '1\n2',
-                description: 'choose vmware system',
-                name : 'my_choice')   
-        booleanParam (
-                defaultValue: false,
-                description: 'do deploy',
-                name : 'deploy')
+        
         string (
-               
-                description: 'heat files zip url',
-                defaultValue: '',
-                name : 'my_str')
+                description: 'gitHub repo to clone',
+                defaultValue: 'https://github.com/eitanbenjam/tikal_eitan_exam.git',
+                name : 'git_repo')
+        string (
+                description: 'component name for docker image',
+                defaultValue: 'eitan-nodejs',
+                name : 'component_name')
+        string (
+                description: 'registy url',
+                defaultValue: '172.17.0.1:5000',
+                name : 'registry_server')
     }
     stages {
+        stage('Clone repo') {
+            steps{
+        	cloneRepo("${params.git_repo}", 'master', '')        
+        	}
+        }
+        stage('Init vars'){
+            steps {
+               script {
+                image_name = "${params.registry_server}/${params.component_name}:${BUILD_NUMBER}"
+            	}
+            }
+            
+        }
         stage('Build') {
             steps {
-                say_hello("hello from lib")
-                print_map(
-			"a": "this is a",
-			"b": "this is b"
-                )
-                echo 'Building..'
+                script{
+                docker.withTool("default") {
+                    def my_container = docker.build("${image_name}", '.')
+                    
+                    }
+                }
             }
         }
         stage('Test') {
             steps {
-                cloneRepo('file:///home/vagrant/jenkins-pipeline-examples/local_git/test_project', 'master', '')
-                echo 'Testing..'
+                script{
+                docker.withTool("default") {
+                    my_container = docker.image("${image_name}").run('-p 80:80')
+                    result =  sh (script: 'curl http://172.17.0.1:80', returnStdout: true).trim()
+                    if (result == "Hello World!"){
+                    	print "Test Passed"
+                    }else{
+                    	print ("Test Failed")
+                    }
+                    my_container.stop()
+                    }
+                }
             }
         }
         stage('Deploy') {
@@ -50,3 +73,4 @@ pipeline {
         }
     }
 }
+
