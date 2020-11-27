@@ -1,76 +1,90 @@
+
 @Library('jenkins_library@master')_
 pipeline {
     agent {label "master"}
-    parameters {     
-        
-        string (
-                description: 'gitHub repo to clone',
-                defaultValue: 'https://github.com/eitanbenjam/tikal_eitan_exam.git',
-                name : 'git_repo')
+    parameters {
         string (
                 description: 'component name for docker image',
                 defaultValue: 'eitan-nodejs',
                 name : 'component_name')
         string (
                 description: 'registy url',
-                defaultValue: '172.17.0.1:5000',
+                defaultValue: '127.0.0.1:5000',
                 name : 'registry_server')
+        string (
+                description: 'response when checking keep alive',
+                defaultValue: 'OK',
+                name : 'check_response')
     }
     stages {
-        stage('Clone repo') {
-            steps{
-        	cloneRepo("${params.git_repo}", 'master', '')        
-        	}
-        }
-        stage('Init vars'){
+        stage('Calc image name'){
             steps {
                script {
                 image_name = "${params.registry_server}/${params.component_name}:${BUILD_NUMBER}"
+                env.image_name = image_name
             	}
-            }
-            
+            }            
         }
-        stage('Build') {
+        stage('Build dokcer image') {
             steps {
                 script{
                 docker.withTool("default") {
-                    def my_container = docker.build("${image_name}", '.')
-                    
-                    }
+                    sh '''
+                    	docker build -t ${image_name} .                    
+                    '''                    
+                    }                    
                 }
             }
         }
-        stage('Test') {
+        stage('Test container') {
             steps {
                 script{
                 docker.withTool("default") {
-                    my_container = docker.image("${image_name}").run('-p 80:80')
-                    result =  sh (script: 'curl http://172.17.0.1:80', returnStdout: true).trim()
-                    if (result == "Hello World!"){
-                    	print "Test Passed"
-                    }else{
-                    	print ("Test Failed")
-                    }
-                    my_container.stop()
+                    test_result = "Failed"
+                    def my_container = docker.image("${image_name}").run("-p 80:80 --name ${params.component_name}-${BUILD_NUMBER}_test")
+                    
+                    result = false
+                    if (my_container) {
+                    	   result =  check_http("http://172.17.0.1:80/test", "${params.check_response}")
+        	           if (result){
+                    	      print "Test Passed"
+                          }else{
+                    	      print "Test Failed, Failing job!!!"
+                    	      currentBuild.result = 'FAILURE'
+                          }
+                    	   my_container.stop()
+                    	}
                     }
                 }
             }
         }
         stage('Deploy') {
             when {
-                expression { return params.do_deploy }
+                expression { return result }
                }
             steps {
                 echo 'Deploying....'
+                script {
+                  docker.withTool("default") {
+                  sh '''
+                     docker push ${image_name}
+                  '''
+                  }
+                }
             }
         }
     }
     post {
         always {
             script {
-		summery()
+		docker.withTool("default") {
+                    sh '''
+                    	docker rmi ${image_name}
+                    '''
+                   
             }
         }
+    }
     }
 }
 
