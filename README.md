@@ -1,5 +1,5 @@
 
-# eitan-tikal-nodejs
+# eitan-nodejs
 hello
 This code will bring nodejs http server that responde "HelloWorld!" to any http request
 
