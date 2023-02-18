@@ -41,12 +41,12 @@ pipeline {
                 script{
                 docker.withTool("default") {
                     test_result = "Failed"
-                    def my_container = docker.image("${image_name}").run("-p 80:80 --name ${params.component_name}-${BUILD_NUMBER}_test")
+                    def my_container = docker.image("${image_name}").run("-p 8066:80 --name ${params.component_name}-${BUILD_NUMBER}_test")
                     
                     result = false
                     if (my_container) {
                            docker_host_ip=sh(script: "docker network inspect bridge -f '{{range .IPAM.Config}}{{.Gateway}}{{end}}'", returnStdout: true).trim()
-                    	   result =  check_http("http://${docker_host_ip}:80/test", "${params.check_response}")
+                    	   result =  check_http("http://${docker_host_ip}:8066/test", "${params.check_response}")
         	           if (result){
                     	      print "Test Passed"
                           }else{
