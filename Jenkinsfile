@@ -45,7 +45,8 @@ pipeline {
                     
                     result = false
                     if (my_container) {
-                    	   result =  check_http("http://172.17.0.1:80/test", "${params.check_response}")
+                           docker_host_ip=sh(script: "docker network inspect bridge -f '{{range .IPAM.Config}}{{.Gateway}}{{end}}'", returnStdout: true).trim()
+                    	   result =  check_http("http://${docker_host_ip}:80/test", "${params.check_response}")
         	           if (result){
                     	      print "Test Passed"
                           }else{
